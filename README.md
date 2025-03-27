@@ -35,8 +35,16 @@ pip install -r requirements.txt
 ### **Usage Instructions**
 - To utilize our code, you need to ensure the following setup within the PyTorch framework: please refer to the requirements.txt for further information.
 - To successfully load and preprocess the data, first download the datasets from the provided link to your local system. Next, add the paths to your working Python console, and then execute the dataset.py and preprocess.py files in that order.
-- Execute the model.py file to initialize the model.
+- Execute the model.py script to initialize the model.
+- Run the train.py script to effectively train our model. You can adjust the number of epochs for additional experimentation.
 - To assess the performance of the model, you can execute the evaluation.py file.
   
 ## **License**
 📜 This project is licensed under the MIT License.
+
+## **References**
+Some of the references are mnetioned below:
+- Yao, X., Zhu, Z., Kang, C., Wang, S. H., Gorriz, J. M., Zhang, Y. D.: AdaD-FNN for chest CT-based COVID-19 diagnosis. IEEE Trans. Emerg. Top. Comput. Intell. 7(1), 5-14 (2022). https://doi.org/10.1109/TETCI.2021.3055181
+- Zhu, X., Yao, X., Zhang, J., Zhu, M., You, L., Yang, X., Zeng, D.: TMSDNet: Transformer with multi‐scale dense network for single and multi‐view 3D reconstruction. Computer Animation and Virtual Worlds, 35(1), e2201 (2024). https://doi.org/10.1002/cav.2201
+- Bernal, J., Sánchez, F. J., Fernández-Esparrach, M. G., Gil, D., Rodríguez, C., Vilariño, F.: WM-DOVA maps for accurate polyp highlighting in colonoscopy: Validation vs. saliency maps from physicians. Comput. Med. Imaging Graph. (2015). https://doi.org/10.1016/j.compmedimag.2015.02.007
+- Zheng, S., Lu, J., Zhao, H., et al.: Rethinking semantic segmentation from a sequence-to-sequence perspective with transformers. Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit., 6881-6890 (2021). https://doi.org/10.1109/CVPR46437.2021.00681
