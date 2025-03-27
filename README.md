@@ -1,4 +1,4 @@
-# **MASET: Multi-scale Attention-based Segmentation Transformer for Medical Image Analysis**  
+# **MASET-Net: Enhancing Medical Image Segmentation with Multi-level Attention and Transformer-based Convolutional Neural Networks**  
 
 ## **Datasets**  
 The following datasets are used to evaluate the performance of the MASET framework::  
@@ -31,6 +31,12 @@ To install dependencies, run:
 
 ```bash
 pip install -r requirements.txt
-
-### **License**
+```
+### **Usage Instructions**
+- To utilize our code, you need to ensure the following setup within the PyTorch framework: please refer to the requirements.txt for further information.
+- To successfully load and preprocess the data, first download the datasets from the provided link to your local system. Next, add the paths to your working Python console, and then execute the dataset.py and preprocess.py files in that order.
+- Execute the model.py file to initialize the model.
+- To assess the performance of the model, you can execute the evaluation.py file.
+  
+## **License**
 📜 This project is licensed under the MIT License.
