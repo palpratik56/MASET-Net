@@ -79,3 +79,14 @@ class MasetNet(nn.Module):
         logits = self.outc(x9)
         feature_maps['output'] = logits
         return logits, feature_maps
+
+
+#Initialize teh model and send it to GPU
+model = MasetNet(n_channels=3, n_classes=1)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Wrap the model for multi-GPU training
+if torch.cuda.device_count() > 1:
+    print(f"Using {torch.cuda.device_count()} GPUs!")
+    model = torch.nn.DataParallel(model)
+    
+model.to(device)
