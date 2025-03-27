@@ -19,7 +19,7 @@ class SEBlock(nn.Module):
         y = self.sigmoid(y).view(batch, channels, 1, 1)
         return x * y
 
-class New_TransUnet(nn.Module):
+class Masetnet(nn.Module):
     def __init__(self, input_channels, output_channels):
         super(New_TransUnet, self).__init__()
         self.encoder = nn.Sequential(
