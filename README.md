@@ -38,9 +38,6 @@ pip install -r requirements.txt
 - Execute the model.py script to initialize the model.
 - Run the train.py script to effectively train our model. You can adjust the number of epochs for additional experimentation.
 - To assess the performance of the model, you can execute the evaluation.py file.
-  
-## **License**
-📜 This project is licensed under the MIT License.
 
 ## **References**
 Some of the references are mentioned below:
