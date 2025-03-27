@@ -1,0 +1,10 @@
+numpy              1.26.4
+pandas             2.2.1
+torch              2.0.1
+torchvision        0.15.2
+tqdm               4.65.0
+matplotlib         3.7.1
+seaborn            0.12.2
+PIL                9.4.0
+os
+random
