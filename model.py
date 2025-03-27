@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from blocks.py import (SEBlock, DoubleConv, Down, AttentionGate, UpConv, PAM_Module,
-PositionEmbeddingLearned, ScaledDotProductAttention)
+from blocks.py import (SEBlock, DoubleConv, Down, AttentionGate, UpConv, PAM_Module, PositionEmbeddingLearned, ScaledDotProductAttention)
 
 class MasetNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
