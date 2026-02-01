@@ -2,26 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class SEBlock(nn.Module):
-    def __init__(self, in_channels, reduction=16):
-        super(SEBlock, self).__init__()
-        self.global_max_pool = nn.AdaptiveMaxPool2d(1)
-        self.fc1 = nn.Linear(in_channels, in_channels // reduction)
-        self.fc2 = nn.Linear(in_channels // reduction, in_channels)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        batch, channels, _, _ = x.size()
-        y = self.global_max_pool(x).view(batch, channels)
-        y = self.fc1(y)
-        y = F.relu(y)
-        y = self.fc2(y)
-        y = self.sigmoid(y).view(batch, channels, 1, 1)
-        return x * y
-      
 class DoubleConv(nn.Module):
+    """(convolution => [BN] => ReLU) * 2"""
+
     def __init__(self, in_channels, out_channels, mid_channels=None):
-        super(DoubleConv, self).__init__()
+        super().__init__()
         if not mid_channels:
             mid_channels = out_channels
         self.double_conv = nn.Sequential(
@@ -32,62 +17,39 @@ class DoubleConv(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
-        self.se = SEBlock(out_channels)
 
     def forward(self, x):
-        x = self.double_conv(x)
-        return self.se(x)
+        return self.double_conv(x)
+
 
 class Down(nn.Module):
     """Downscaling with maxpool then double conv"""
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.maxpool_conv = nn.Sequential(
-            nn.MaxPool2d(2),
+        self.avgpool_conv = nn.Sequential(
+            nn.AvgPool2d(2),
             DoubleConv(in_channels, out_channels)
         )
 
     def forward(self, x):
-        return self.maxpool_conv(x)
+        return self.avgpool_conv(x)
 
-class AttentionGate(nn.Module):
-    def __init__(self,F_int):
-        super(AttentionGate, self).__init__()
-        self.W_g = nn.Sequential(
-            nn.Conv2d(F_int, F_int, kernel_size=1,padding=0),
-            nn.BatchNorm2d(F_int)
-        )
-        self.W_x = nn.Sequential(
-            nn.Conv2d(F_int, F_int, kernel_size=1,padding=0),
-            nn.BatchNorm2d(F_int)
-        )
-        self.psi = nn.Sequential(
-            nn.Conv2d(F_int, 1, kernel_size=1,padding=0),
-            nn.BatchNorm2d(1),
-            nn.Sigmoid()
-        )
-        self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, x):
-        g1 = self.W_g(x)
-        x1 = self.W_x(x)
-        psi = self.relu(g1 + x1)
-        psi = self.psi(psi)
-        return x * psi
+class Up(nn.Module):
+    """Upscaling then double conv"""
 
-class UpConv(nn.Module):
     def __init__(self, in_channels, out_channels, bilinear=True):
-        super(UpConv, self).__init__()
+        super().__init__()
+
+        # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
             self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
             self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
         else:
             self.up = nn.ConvTranspose2d(in_channels , in_channels // 2, kernel_size=2, stride=2)
             self.conv = DoubleConv(in_channels, out_channels)
-            
-        self.att = AttentionGate(out_channels)
-        self.se = SEBlock(out_channels)
+
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
@@ -95,13 +57,19 @@ class UpConv(nn.Module):
         diffY = x2.size()[2] - x1.size()[2]
         diffX = x2.size()[3] - x1.size()[3]
 
-        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,  diffY // 2, diffY - diffY // 2])
         x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        x = self.att(x)
-        x = self.se(x)
-        return x
+        return self.conv(x)
+        
+
+class OutConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(OutConv, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+
+    def forward(self, x):
+        return self.conv(x)
+        
 
 class PAM_Module(nn.Module):
     def __init__(self, in_dim):
@@ -129,54 +97,91 @@ class PAM_Module(nn.Module):
         out = self.gamma * out + x
         return out
 
-class PositionEmbeddingLearned(nn.Module):
-    def __init__(self, num_pos_feats=256, len_embedding=32):
+
+class ASIB(nn.Module):
+    """
+    Memory-efficient Adaptive Scale Interaction Block
+    """
+    def __init__(self, high_ch, low_ch, out_ch, reduction=2):
         super().__init__()
-        self.row_embed = nn.Embedding(len_embedding, num_pos_feats)
-        self.col_embed = nn.Embedding(len_embedding, num_pos_feats)
-        self.reset_parameters()
+        self.pool = nn.AvgPool2d(reduction)
 
-    def reset_parameters(self):
-        nn.init.uniform_(self.row_embed.weight)
-        nn.init.uniform_(self.col_embed.weight)
+        self.query = nn.Conv2d(high_ch, out_ch, 1)
+        self.key   = nn.Conv2d(low_ch, out_ch, 1)
+        self.value = nn.Conv2d(low_ch, out_ch, 1)
 
-    def forward(self, tensor_list):
-        x = tensor_list
-        h, w = x.shape[-2:]
-        i = torch.arange(w, device=x.device)
-        j = torch.arange(h, device=x.device)
+        self.gamma = nn.Parameter(torch.zeros(1))
+        self.softmax = nn.Softmax(dim=-1)
+        
+    def forward(self, high_feat, low_feat):
+        high_ds = self.pool(high_feat)
+        low_ds  = self.pool(low_feat)
 
-        x_emb = self.col_embed(i)
-        y_emb = self.row_embed(j)
+        B, C, H, W = high_ds.shape
 
-        pos = torch.cat([
-            x_emb.unsqueeze(0).repeat(h, 1, 1),
-            y_emb.unsqueeze(1).repeat(1, w, 1),
-        ], dim=-1).permute(2, 0, 1).unsqueeze(0).repeat(x.shape[0], 1, 1, 1)
+        q = self.query(high_ds).view(B, -1, H*W).permute(0, 2, 1)
+        k = self.key(low_ds).view(B, -1, H*W)
+        v = self.value(low_ds).view(B, -1, H*W)
 
-        return pos
+        attn = self.softmax(torch.bmm(q, k))
+        out  = torch.bmm(v, attn.permute(0, 2, 1))
+        out  = out.view(B, -1, H, W)
 
-class ScaledDotProductAttention(nn.Module):
-    def __init__(self, temperature, attn_dropout=0.1):
+        out = F.interpolate(out, size=high_feat.shape[2:], mode='bilinear', align_corners=False)
+        return high_feat + self.gamma * out
+
+
+class FAAB(nn.Module):
+    """
+    Memory-efficient Frequency-Aware Attention Block
+    """
+    def __init__(self, channels, reduction=4):
         super().__init__()
-        self.temperature = temperature ** 0.5
-        self.dropout = nn.Dropout(attn_dropout)
+        reduced = channels // reduction
 
-    def forward(self, x, mask=None):
-        m_batchsize, d, height, width = x.size()
-        q = x.view(m_batchsize, d, -1)
-        k = x.view(m_batchsize, d, -1)
-        k = k.permute(0, 2, 1)
-        v = x.view(m_batchsize, d, -1)
+        self.reduce = nn.Conv2d(channels, reduced, 1)
+        self.expand = nn.Conv2d(reduced, channels, 1)
 
-        attn = torch.matmul(q / self.temperature, k)
+    def forward(self, x):
+        x_r = self.reduce(x)
 
-        if mask is not None:
-            attn = attn.masked_fill(mask == 0, -1e9)
+        fft = torch.fft.fft2(x_r)
+        fft = torch.fft.ifft2(fft)
 
-        attn = self.dropout(F.softmax(attn, dim=-1))
-        output = torch.matmul(attn, v)
-        output = output.view(m_batchsize, d, height, width)
+        x_r = fft.real
+        return self.expand(x_r)
+        
 
-        return output
+class TAAC(nn.Module):
+    """
+    Task-Aware Attention Calibration
+    Channel recalibration conditioned on decoder semantic context
+    """
+    def __init__(self, x_ch, task_ch, reduction=4):
+        super().__init__()
+
+        self.task_proj = nn.Linear(task_ch, x_ch)
+
+        self.fc = nn.Sequential(
+            nn.Linear(x_ch * 2, x_ch // reduction),
+            nn.ReLU(inplace=True),
+            nn.Linear(x_ch // reduction, x_ch),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x, task_feat):
+        b, c, _, _ = x.size()
+
+        # Global pooling
+        x_gap = F.adaptive_avg_pool2d(x, 1).view(b, c)
+        t_gap = F.adaptive_avg_pool2d(task_feat, 1).view(b, -1)
+
+        # Project task features to x channel space
+        t_gap = self.task_proj(t_gap)
+
+        # Channel attention
+        attn = self.fc(torch.cat([x_gap, t_gap], dim=1)).view(b, c, 1, 1)
+
+        return x * attn
+
       
